@@ -26,7 +26,9 @@ const useVariables = object => {
 // Font variant numeric utilities need a special treatment, because
 // there can be many font variant classes and they need to be transformed to an array
 const addFontVariant = (style, separateClassNames, prefix) => {
-	const regex = new RegExp(`^${prefix}(oldstyle-nums|lining-nums|tabular-nums|proportional-nums)$`);
+	const regex = new RegExp(
+		`^${prefix}(oldstyle-nums|lining-nums|tabular-nums|proportional-nums)$`
+	);
 
 	const matches = separateClassNames
 		.filter(className => regex.test(className))
@@ -54,8 +56,7 @@ const addLetterSpacing = (style, letterSpacing) => {
 };
 
 const create = (tailwindStyles, breakpointsConfig) => {
-	const screenNames = breakpointsConfig
-		.map(breakpoint => breakpoint.name);
+	const screenNames = breakpointsConfig.map(breakpoint => breakpoint.name);
 
 	const supportedScreens = [
 		defaultBreakpointKey,
@@ -66,10 +67,12 @@ const create = (tailwindStyles, breakpointsConfig) => {
 
 	const breakpointPrefixRegex = new RegExp(`^(${screenNames.join('|')}):`);
 
+	const hoverRegex = /:?hover:/;
+
 	// Pass a list of class names separated by a space, for example:
 	// "bg-green-100 text-green-800 font-semibold")
 	// and receive a styles object for use in React Native views
-	const tailwind = classNames => {
+	const tailwind = (classNames, {focus = false, hover = false} = {}) => {
 		const style = {};
 
 		if (!classNames) {
@@ -82,7 +85,9 @@ const create = (tailwindStyles, breakpointsConfig) => {
 			.split(' ');
 
 		const classNamesByScreens = separateClassNames.reduce((acc, className) => {
-			const screen = screenNames.find(_screen => className.startsWith(`${_screen}:`)) || defaultBreakpointKey;
+			const screen =
+				screenNames.find(_screen => className.startsWith(`${_screen}:`)) ||
+				defaultBreakpointKey;
 
 			if (!acc[screen]) {
 				acc[screen] = [];
@@ -103,12 +108,18 @@ const create = (tailwindStyles, breakpointsConfig) => {
 			// Adding font variant for each supported screen
 			// since the supported screens are sorted,
 			// font variant rules of bigger screens will always override those of smaller ones
-			const breakpointPrefix = defaultBreakpointKey === screen ? '' : `${screen}:`;
+			const breakpointPrefix =
+				defaultBreakpointKey === screen ? '' : `${screen}:`;
 			addFontVariant(style, separateClassNames, breakpointPrefix);
 
 			for (const screenCalssName of classNamesByScreens[screen]) {
 				const className = screenCalssName.replace(breakpointPrefixRegex, '');
-				if (!tailwindStyles[className]) {
+				if (hoverRegex.test(className) && hover) {
+					Object.assign(
+						style,
+						tailwindStyles[className.replace(hoverRegex, '')]
+					);
+				} else if (!tailwindStyles[className] && !hoverRegex.test(className)) {
 					console.warn(`Unsupported Tailwind class: "${screenCalssName}"`);
 				} else if (className.startsWith('tracking-')) {
 					letterSpacingClassName = className;
@@ -120,7 +131,10 @@ const create = (tailwindStyles, breakpointsConfig) => {
 
 		// Add Letter spacing at last to be sure that we dont miss fontSize rule
 		if (letterSpacingClassName) {
-			addLetterSpacing(style, tailwindStyles[letterSpacingClassName].letterSpacing);
+			addLetterSpacing(
+				style,
+				tailwindStyles[letterSpacingClassName].letterSpacing
+			);
 		}
 
 		return useVariables(style);
@@ -129,7 +143,12 @@ const create = (tailwindStyles, breakpointsConfig) => {
 	// Pass the name of a color (e.g. "blue-500") and receive a color value (e.g. "#4399e1"),
 	// or a color and opacity (e.g. "black opacity-50") and get a color with opacity (e.g. "rgba(0,0,0,0.5)")
 	const getColor = name => {
-		const style = tailwind(name.split(' ').map(className => `bg-${className}`).join(' '));
+		const style = tailwind(
+			name
+				.split(' ')
+				.map(className => `bg-${className}`)
+				.join(' ')
+		);
 		return style.backgroundColor;
 	};
 
